@@ -29,6 +29,14 @@ const worker = {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
 
+    // Sites sends asset requests through this worker in production. Serve Vite's
+    // content-hashed CSS/JS directly from the ASSETS binding before the app
+    // router sees them; otherwise the browser receives an HTML response for a
+    // stylesheet or module and renders the unstyled server markup.
+    if (url.pathname.startsWith("/assets/")) {
+      return env.ASSETS.fetch(request);
+    }
+
     if (url.pathname === "/_vinext/image") {
       const allowedWidths = [...DEFAULT_DEVICE_SIZES, ...DEFAULT_IMAGE_SIZES];
       return handleImageOptimization(request, {

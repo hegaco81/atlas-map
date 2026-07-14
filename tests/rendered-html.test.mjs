@@ -20,3 +20,25 @@ test("server-renders the Atlas municipal budget dashboard", async () => {
   assert.match(html, /Guadalajara/);
   assert.doesNotMatch(html, /Codex is working|Your site is taking shape|react-loading-skeleton/i);
 });
+
+test("serves browser CSS and JavaScript from the static asset binding", async () => {
+  const workerUrl = new URL("../dist/server/index.js", import.meta.url);
+  workerUrl.searchParams.set("assets-test", `${process.pid}-${Date.now()}`);
+  const { default: worker } = await import(workerUrl.href);
+  let requestedPath = null;
+  const response = await worker.fetch(
+    new Request("http://localhost/assets/atlas-test.css"),
+    {
+      ASSETS: {
+        fetch: async (request) => {
+          requestedPath = new URL(request.url).pathname;
+          return new Response(".atlas-shell{display:grid}", { headers: { "content-type": "text/css" } });
+        },
+      },
+    },
+    { waitUntil() {}, passThroughOnException() {} },
+  );
+  assert.equal(requestedPath, "/assets/atlas-test.css");
+  assert.match(response.headers.get("content-type") ?? "", /^text\/css/i);
+  assert.match(await response.text(), /atlas-shell/);
+});
