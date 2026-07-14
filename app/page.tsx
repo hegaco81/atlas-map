@@ -34,6 +34,11 @@ export default function Home() {
   const [metric, setMetric] = useState<"Cumplimiento" | "Brecha" | "Proyección">("Cumplimiento");
   const [scenario, setScenario] = useState<"Conservador" | "Probable" | "Agresivo">("Probable");
   const [filter, setFilter] = useState<"Todos" | "< 90%" | "Con inventario">("Todos");
+  const [question, setQuestion] = useState("");
+  const [assistantAnswer, setAssistantAnswer] = useState("Listo para explorar: selecciona un municipio, cambia la versión o pregunta por una brecha.");
+  const [planOpen, setPlanOpen] = useState(false);
+  const [jarvisListening, setJarvisListening] = useState(false);
+  const [jarvisMessage, setJarvisMessage] = useState("Di “Atlas, analiza Jalisco” para comenzar.");
 
   const rows = useMemo(() => municipalities.filter((m) => {
     if (filter === "< 90%") return pct(m.sales, m.budget) < 90;
@@ -47,6 +52,22 @@ export default function Home() {
   const projected = totalSales / 12 * 20;
   const paceBudget = totalBudget * 0.59;
   const scenarioFactor = scenario === "Conservador" ? 0.53 : scenario === "Probable" ? 1 : 1.7;
+  const runAssistant = () => {
+    const query = question.toLowerCase();
+    if (query.includes("zapopan")) { setSelected("Zapopan"); setAssistantAnswer("Abrí Zapopan: cumple 96.4% de venta, pero su margen está por debajo del presupuesto. Prioridad: reducir descuentos."); }
+    else if (query.includes("guadalajara") || query.includes("brecha")) { setSelected("Guadalajara"); setFilter("< 90%"); setAssistantAnswer("Guadalajara concentra la mayor brecha: $3.5M. El escenario probable recupera $1.7M con clientes inactivos y venta cruzada."); }
+    else if (query.includes("inventario")) { setFilter("Con inventario"); setAssistantAnswer("Apliqué el filtro de inventario disponible. Puerto Vallarta queda fuera por cobertura insuficiente."); }
+    else if (query.includes("municipio") || query.includes("riesgo")) { setFilter("< 90%"); setAssistantAnswer("Resalté los municipios por debajo de 90% de cumplimiento. Ordénalos por brecha en la tabla para priorizar visitas."); }
+    else setAssistantAnswer(`Jalisco va en ${pct(totalSales, paceBudget).toFixed(1)}% del presupuesto acumulado. Faltan ${money(totalBudget-totalSales)} para la meta mensual y el cierre estimado es ${pct(projected,totalBudget).toFixed(1)}%.`);
+    setQuestion("");
+  };
+  const runJarvis = (intent: "risk" | "guadalajara" | "recovery") => {
+    setJarvisListening(true);
+    if (intent === "risk") { setFilter("< 90%"); setJarvisMessage("Mostrando municipios por debajo de 90% de cumplimiento. Guadalajara, Puerto Vallarta y Tepatitlán requieren atención."); }
+    if (intent === "guadalajara") { setSelected("Guadalajara"); setJarvisMessage("Zoom operativo en Guadalajara. La brecha actual es $3.5M y la oportunidad recuperable probable es $1.7M."); }
+    if (intent === "recovery") { setPlanOpen(true); setJarvisMessage("Simulación probable activada: podemos recuperar $3.5M a nivel Jalisco combinando inventario, reactivación y venta cruzada."); }
+    setTimeout(() => setJarvisListening(false), 900);
+  };
 
   return (
     <main className="atlas-shell">
@@ -80,6 +101,13 @@ export default function Home() {
             </div>
           </section>
 
+          <section className="command-bar" aria-label="Consulta a Atlas AI">
+            <span className="command-icon">✦</span>
+            <input value={question} onChange={(event) => setQuestion(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") runAssistant(); }} placeholder="Pregunta: “¿Qué municipios tienen mayor brecha?”" aria-label="Pregunta a Atlas" />
+            <button onClick={runAssistant}>Analizar <span>↵</span></button>
+            <p aria-live="polite">{assistantAnswer}</p>
+          </section>
+
           <section className="kpis" aria-label="Indicadores presupuestales">
             <Kpi label="Venta real" value={money(totalSales)} detail="+7.8% vs. año anterior" tone="good" />
             <Kpi label="Presupuesto acumulado" value={money(paceBudget)} detail="59% del mes hábil" />
@@ -91,7 +119,7 @@ export default function Home() {
 
           <section className="dashboard-grid">
             <article className="map-card panel">
-              <div className="panel-head"><div><p className="eyebrow">NIVEL MUNICIPIO · {level.toUpperCase()}</p><h2>Riesgo presupuestal en Jalisco</h2></div><button className="ghost">⌖ Centrar mapa</button></div>
+              <div className="panel-head"><div><p className="eyebrow">MAPA OPERATIVO · NIVEL MUNICIPIO · {level.toUpperCase()}</p><h2>Riesgo presupuestal en Jalisco</h2></div><button className="ghost" onClick={() => { setFilter("Todos"); setSelected("Guadalajara"); }}>⌖ Centrar mapa</button></div>
               <div className="map-toolbar">
                 <div className="segmented" aria-label="Métrica del mapa">
                   {(["Cumplimiento", "Brecha", "Proyección"] as const).map((item) => <button key={item} className={metric === item ? "selected" : ""} onClick={() => setMetric(item)}>{item}</button>)}
@@ -113,7 +141,8 @@ export default function Home() {
               <p>Guadalajara, Puerto Vallarta y Tepatitlán explican <b>74%</b> de la brecha de frenos. La venta crece, pero por debajo de una meta más agresiva.</p>
               <div className="insight-metric"><span>Brecha recuperable</span><strong>{money(totalRecoverable * scenarioFactor)}</strong><small>{scenario === "Probable" ? "58% de la brecha actual" : `${scenario === "Conservador" ? "31" : "88"}% de la brecha actual`}</small></div>
               <div className="scenario"><span>Simulación</span><div>{(["Conservador", "Probable", "Agresivo"] as const).map((item) => <button key={item} className={scenario === item ? "scenario-on" : ""} onClick={() => setScenario(item)}>{item}</button>)}</div></div>
-              <button className="primary">Ver plan de recuperación <span>→</span></button>
+              <button className="primary" onClick={() => setPlanOpen(!planOpen)}>{planOpen ? "Ocultar plan" : "Ver plan de recuperación"} <span>{planOpen ? "↑" : "→"}</span></button>
+              {planOpen && <div className="action-plan"><b>Plan probable · 8 días hábiles</b><span>Reactivar 42 clientes con crédito.</span><span>Transferir excedente de frenos a Guadalajara.</span><span>Visitas de recuperación: Tepatitlán.</span></div>}
             </article>
           </section>
 
@@ -130,8 +159,14 @@ export default function Home() {
         <div className="attainment"><div className="donut"><strong>{pct(active.sales,active.budget).toFixed(0)}%</strong><span>cumplimiento</span></div><div><span>Venta real</span><strong>{money(active.sales)}</strong><small>de {money(active.budget)} presupuestado</small></div></div>
         <div className="detail-grid"><Metric label="Presupuesto acumulado" value={money(active.budget*.59)} /><Metric label="Brecha actual" value={money(Math.max(active.budget-active.sales,0))} risk /><Metric label="Margen real" value={money(active.margin)} /><Metric label="Margen presup." value={money(active.marginBudget)} risk /></div>
         <section className="why"><p className="eyebrow">EXPLICACIÓN DE DESVIACIÓN</p><h3>¿Qué está explicando la brecha?</h3><Factor label="Clientes activos" value="−$0.62M" width="74%" /><Factor label="Ticket promedio" value="−$0.41M" width="53%" /><Factor label="Inventario disponible" value="−$0.30M" width="39%" /><p className="hypothesis"><b>Hipótesis:</b> menor frecuencia de visita y disponibilidad están asociadas a la desviación; requiere validación comercial.</p></section>
-        <section className="recovery"><p className="eyebrow">RECUPERACIÓN PROBABLE</p><strong>{money(active.recoverable)}</strong><span>clientes inactivos + venta cruzada</span><button className="primary">Simular acciones →</button></section>
+        <section className="recovery"><p className="eyebrow">RECUPERACIÓN {scenario.toUpperCase()}</p><strong>{money(active.recoverable * scenarioFactor)}</strong><span>clientes inactivos + venta cruzada</span><button className="primary" onClick={() => { setPlanOpen(true); setAssistantAnswer(`Simulación ${scenario.toLowerCase()} para ${active.name}: la recuperación potencial es ${money(active.recoverable * scenarioFactor)} y el cumplimiento proyectado llegaría a ${Math.min(100, pct(active.sales + active.recoverable * scenarioFactor, active.budget)).toFixed(1)}%.`); }}>Simular acciones →</button></section>
       </aside>
+      <section className="jarvis" aria-label="Consola de voz Jarvis">
+        <div className="jarvis-orb" aria-hidden="true"><i className={jarvisListening ? "listening" : ""}>✦</i></div>
+        <div className="jarvis-copy"><span>JARVIS · ASISTENTE COMERCIAL</span><strong>{jarvisListening ? "Analizando contexto geográfico…" : jarvisMessage}</strong></div>
+        <div className="jarvis-actions"><button onClick={() => runJarvis("risk")}>Riesgo</button><button onClick={() => runJarvis("guadalajara")}>Guadalajara</button><button onClick={() => runJarvis("recovery")}>Recuperación</button></div>
+        <button className={`jarvis-mic ${jarvisListening ? "active" : ""}`} onClick={() => { setJarvisListening(!jarvisListening); setJarvisMessage(jarvisListening ? "Escucha pausada." : "Escuchando: puedes elegir un comando rápido."); }} aria-label="Activar asistente Jarvis">◉</button>
+      </section>
     </main>
   );
 }
