@@ -33,7 +33,7 @@ const worker = {
     // content-hashed CSS/JS directly from the ASSETS binding before the app
     // router sees them; otherwise the browser receives an HTML response for a
     // stylesheet or module and renders the unstyled server markup.
-    if (url.pathname.startsWith("/assets/")) {
+    if (url.pathname.startsWith("/assets/") || url.pathname === "/mexico-municipalities.geojson" || url.pathname.endsWith(".svg")) {
       return env.ASSETS.fetch(request);
     }
 
