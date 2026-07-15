@@ -13,8 +13,8 @@ presupuesto y venta real, y una consola Jarvis para interactuar con la vista.
 ## Instalar en una Mac nueva
 
 ```bash
-git clone https://github.com/hegaco81/atlas-geosales-ai.git
-cd atlas-geosales-ai
+git clone https://github.com/hegaco81/atlas-map.git
+cd atlas-map
 npm install
 npm run dev
 ```
