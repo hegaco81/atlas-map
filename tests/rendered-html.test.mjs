@@ -18,8 +18,8 @@ test("server-renders the Atlas municipal budget dashboard", async () => {
   assert.match(html, /Atlas GeoSales AI/i);
   assert.match(html, /Jalisco/);
   assert.match(html, /Presupuesto comercial/i);
-  assert.match(html, /Guadalajara/i);
-  assert.match(html, /Jarvis · Asistente de ventas/i);
+  assert.match(html, /Hermes \+ Jarvis · GeoSales/i);
+  assert.match(html, /Hermes está activo/i);
   assert.doesNotMatch(html, /Codex is working|Your site is taking shape|react-loading-skeleton/i);
 });
 
@@ -61,4 +61,7 @@ test("builds municipal paths from each feature geometry", async () => {
   const pageSource = await readFile(new URL("../app/page.tsx", import.meta.url), "utf8");
   assert.match(pageSource, /geometryPath\(feature\.geometry\)/);
   assert.doesNotMatch(pageSource, /geometryPath\(feature\)\s*}/);
+  assert.match(pageSource, /onClick=\{\(\) => zoomBy\(\.72\)\}/);
+  assert.match(pageSource, /Compara Guadalajara contra Zapopan/);
+  assert.match(pageSource, /setLayer\("Proyección"\)/);
 });
