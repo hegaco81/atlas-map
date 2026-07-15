@@ -46,6 +46,7 @@ function geometryPath(geometry: Geometry) {
 
 export default function Home() {
   const [geo, setGeo] = useState<GeoData | null>(null);
+  const [mapError, setMapError] = useState("");
   const [selected, setSelected] = useState<Municipality | null>(null);
   const [layer, setLayer] = useState("Venta");
   const [period, setPeriod] = useState("May 2026 – Jul 2026");
@@ -59,10 +60,23 @@ export default function Home() {
   const recognitionRef = useRef<{ start: () => void; stop: () => void } | null>(null);
 
   useEffect(() => {
-    fetch("/mexico-municipalities.geojson").then((response) => response.json()).then((data: GeoData) => setGeo(data));
+    let active = true;
+    fetch("/mexico-municipalities.geojson")
+      .then((response) => {
+        if (!response.ok) throw new Error(`No se pudo cargar el mapa (${response.status})`);
+        return response.json();
+      })
+      .then((data: GeoData) => {
+        if (!Array.isArray(data.features)) throw new Error("El archivo municipal no contiene datos válidos");
+        if (active) setGeo(data);
+      })
+      .catch(() => {
+        if (active) setMapError("No fue posible cargar la geometría municipal. Actualiza la página para intentarlo de nuevo.");
+      });
+    return () => { active = false; };
   }, []);
 
-  const paths = useMemo(() => geo?.features.map((feature) => ({ feature, d: geometryPath(feature) })) ?? [], [geo]);
+  const paths = useMemo(() => geo?.features.map((feature) => ({ feature, d: geometryPath(feature.geometry) })) ?? [], [geo]);
   const selectedScore = selected ? metricFor(selected) : 84;
   const selectedName = selected?.properties.mun_name ?? "Nacional";
   const selectedState = selected ? states[selected.properties.state_code] : "México";
@@ -174,7 +188,7 @@ export default function Home() {
           <svg className="mexico-map" viewBox={mapViewBox} role="img" aria-label="Mapa municipal interactivo de México">
             <g transform="translate(0,10)">{paths.map(({ feature, d }) => <path key={`${feature.properties.state_code}-${feature.properties.mun_code}`} d={d} fill={colorFor(feature)} className={`${selected === feature ? "selected-mun" : ""} ${focusedState && feature.properties.state_code !== focusedState ? "dimmed-mun" : ""}`} onClick={() => { setSelected(feature); setFocusedState(feature.properties.state_code); setAnswer(`${feature.properties.mun_name}, ${states[feature.properties.state_code]}: ${metricFor(feature)+61}% de cumplimiento. Haz una pregunta a Jarvis para explicar la brecha.`); }}><title>{feature.properties.mun_name}, {states[feature.properties.state_code]}</title></path>)}</g>
           </svg>
-          {!geo && <div className="map-loading"><i/> Cargando municipios de México…</div>}
+          {!geo && <div className={`map-loading ${mapError ? "is-error" : ""}`}><i/> {mapError || "Cargando municipios de México…"}</div>}
           <div className="map-labels"><b className="label-north">SONORA</b><b className="label-center">JALISCO</b><b className="label-east">VERACRUZ</b><b className="label-south">OAXACA</b></div>
           <div className="map-legend"><b>{layer.toUpperCase()} · MXN</b>{palette.map((color, index) => <span key={color}><i style={{background:color}}/>{index === 0 ? "Crítico" : index === 1 ? "Riesgo alto" : index === 2 ? "Atención" : index === 3 ? "En meta" : "Sobrecumple"}</span>)}</div>
           <div className="map-controls"><button>＋</button><button>−</button><button>⌖</button></div>
@@ -195,4 +209,4 @@ export default function Home() {
 }
 
 function Metric({label,value}:{label:string;value:string}) { return <div><span>{label}</span><b>{value}</b></div>; }
-function Ranking({title,rows}:{title:string;rows:string[][]}) { return <section className="ranking"><p className="section-label">{title}</p>{rows.map(([name,value,units])=><div className="rank-row" key={name}><div><b>{name}</b><span>Zona comercial</span></div><div><strong>{value}</strong><span>{units}</span></div></div>)}</section>; }
+function Ranking({title,rows}:{title:string;rows:string[][]}) { return <section className="ranking"><p className="section-label">{title}</p>{rows.map(([name,value,units])=><div className="rank-row" key={`${name}-${value}`}><div><b>{name}</b><span>Zona comercial</span></div><div><strong>{value}</strong><span>{units}</span></div></div>)}</section>; }

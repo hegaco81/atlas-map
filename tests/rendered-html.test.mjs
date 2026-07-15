@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 async function render() {
@@ -54,4 +55,10 @@ test("serves the municipal GeoJSON used by the interactive map", async () => {
   }, { waitUntil() {}, passThroughOnException() {} });
   assert.equal(requestedPath, "/mexico-municipalities.geojson");
   assert.match(response.headers.get("content-type") ?? "", /geo\+json/i);
+});
+
+test("builds municipal paths from each feature geometry", async () => {
+  const pageSource = await readFile(new URL("../app/page.tsx", import.meta.url), "utf8");
+  assert.match(pageSource, /geometryPath\(feature\.geometry\)/);
+  assert.doesNotMatch(pageSource, /geometryPath\(feature\)\s*}/);
 });
